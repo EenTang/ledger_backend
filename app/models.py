@@ -1,17 +1,8 @@
-from . import *
-from app import db
-from datetime import datetime
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from . import db
+from datetime import datetime, date
 
 
-class BaseModel(Base):
-    __abstract__ = True
-    id = db.Column(db.Integer, primary_key=True)
-
-
-class Boss(BaseModel):
+class Boss(db.Model):
 
     __tablename__ = 'boss'
 
@@ -20,7 +11,7 @@ class Boss(BaseModel):
     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
     expire_time = db.Column(db.DATETIME)
 
-class Store(BaseModel):
+class Store(db.Model):
 
     __tablename__ = 'store'
 
@@ -31,10 +22,10 @@ class Store(BaseModel):
     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
 
 
-class User(BaseModel):
+class User(db.Model):
     __tablename__ = 'user'
 
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
+    store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
     role = db.Column(db.Integer, db.ForeignKey('role.id', onupdate="CASCADE", ondelete="CASCADE"))
     name = db.Column(db.String(64))
     password = db.Column(db.String(64))
@@ -42,28 +33,20 @@ class User(BaseModel):
     wechat = db.Column(db.String(64))
 
 
-class Role(BaseModel):
+class Role(db.Model):
 
     __tablename__ = 'role'
 
+    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
     name = db.Column(db.String(64))
     module_permission = db.Column(db.Text)
 
 
-class OrderGeneral(BaseModel):
-
-    __tablename__ = 'order_general'
-
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
-    create_time = db.Column(db.DATETIME, default=datetime.utcnow)
-    estimated_total_price = db.Column(db.Float)
-
-
-class GoodsInfo(BaseModel):
+class GoodsInfo(db.Model):
 
     __tablename__ = 'goods_info'
 
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
+    store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
     name = db.Column(db.String(64))
     unit_price = db.Column(db.Float)
     unit = db.Column(db.String(64))
@@ -72,23 +55,32 @@ class GoodsInfo(BaseModel):
     description = db.Column(db.Text)
 
 
-class ClientInfo(BaseModel):
+class ClientInfo(db.Model):
 
     __tablename__ = 'client_info'
 
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
+    store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
     name = db.Column(db.String(64))
     description = db.Column(db.Text)
     phone = db.Column(db.String(64))
     wechat = db.Column(db.String(64))
 
 
-class OrderBook(BaseModel):
+# class OrderGeneral(db.Model):
+
+#     __tablename__ = 'order_general'
+
+#     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
+#     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
+#     estimated_total_price = db.Column(db.Float)
+
+
+class OrderBook(db.Model):
 
     __tablename__ = 'order_book'
 
     client = db.Column(db.Integer, db.ForeignKey('client_info.id', onupdate="CASCADE", ondelete="CASCADE"))
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
+    store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
     goods = db.Column(db.String(64))
     quantity = db.Column(db.Integer)
     unit = db.Column(db.String(64))
@@ -97,16 +89,14 @@ class OrderBook(BaseModel):
     description = db.Column(db.Text)
     verify = db.Column(db.Boolean)
     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
+    create_date = db.Column(db.Date, default=date.today)
 
 
-
-
-class IncomeGeneral(BaseModel):
+class IncomeGeneral(db.Model):
 
     __tablename__ = 'income_general'
 
     client = db.Column(db.Integer, db.ForeignKey('client_info.id', onupdate="CASCADE", ondelete="CASCADE"))
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
 
     debt = db.Column(db.Float)
@@ -116,16 +106,17 @@ class IncomeGeneral(BaseModel):
     update_time = db.Column(db.DATETIME, default=datetime.utcnow)
     analyze = db.Column(db.String(64))
     visible = db.Column(db.Boolean)
+    create_date = db.Column(db.Date, default=date.today)
 
 
-class IncomeDetails(BaseModel):
+class IncomeDetails(db.Model):
 
     __tablename__ = 'income_details'
 
+    id = db.Column(db.Integer, primary_key=True)
+
     client = db.Column(db.Integer, db.ForeignKey('client_info.id', onupdate="CASCADE", ondelete="CASCADE"))
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
-    general = db.Column(db.Integer, db.ForeignKey('income_general.id', onupdate="CASCADE", ondelete="CASCADE"))
 
     goods = db.Column(db.String(64))
     quantity = db.Column(db.Integer)
@@ -137,14 +128,14 @@ class IncomeDetails(BaseModel):
     update_time = db.Column(db.DATETIME, default=datetime.utcnow)
     analyze = db.Column(db.String(64))
     visible = db.Column(db.Boolean)
+    create_date = db.Column(db.Date, default=date.today)
 
 
-class CostGeneral(BaseModel):
+class CostGeneral(db.Model):
 
     __tablename__ = 'cost_general'
 
     client = db.Column(db.Integer, db.ForeignKey('client_info.id', onupdate="CASCADE", ondelete="CASCADE"))
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
 
     total = db.Column(db.Float)
@@ -153,16 +144,15 @@ class CostGeneral(BaseModel):
     description = db.Column(db.Text)
     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
     update_time = db.Column(db.DATETIME, default=datetime.utcnow)
+    create_date = db.Column(db.Date, default=date.today)
 
 
-class CostDetails(BaseModel):
+class CostDetails(db.Model):
 
     __tablename__ = 'cost_details'
 
     client = db.Column(db.Integer, db.ForeignKey('client_info.id', onupdate="CASCADE", ondelete="CASCADE"))
-    owner = db.Column(db.String(64), db.ForeignKey('boss.boss_id', onupdate="CASCADE", ondelete="CASCADE"))
     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
-    general = db.Column(db.Integer, db.ForeignKey('cost_general.id', onupdate="CASCADE", ondelete="CASCADE"))
 
     goods = db.Column(db.String(64))
     quantity = db.Column(db.Integer)
@@ -172,17 +162,7 @@ class CostDetails(BaseModel):
     description = db.Column(db.Text)
     create_time = db.Column(db.DATETIME, default=datetime.utcnow)
     update_time = db.Column(db.DATETIME, default=datetime.utcnow)
-
-
-if __name__ == '__main__':
-    from sqlalchemy import create_engine
-    uri = 'mysql://root:tangT#$1@192.168.31.225:3300/ledger'
-    engine = create_engine(uri, convert_unicode=True)
-    # create_app('dev')
-    Base.metadata.create_all(bind=engine)
-
-
-
+    create_date = db.Column(db.Date, default=date.today)
 
 
 
