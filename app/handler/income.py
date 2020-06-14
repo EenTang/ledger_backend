@@ -17,7 +17,8 @@ def income_details():
         result = get_income_details(request.args)
         return result
     if request.method == 'PUT':
-        pass
+        update_income_detail(request.json['data'])
+        return success()
     if request.method == 'DELETE':
         delete_income_details(request.args)
         return success()
@@ -67,6 +68,19 @@ def delete_income_details(req):
     detail_id = req["detail_id"]
     IncomeDetails.query.filter_by(id=detail_id).delete()
     db.session.commit()
+
+def update_income_detail(req):
+    detail_id = req.pop('detail_id')
+    detail = IncomeDetails.query.filter_by(id=detail_id).first()
+    if detail:
+        total_price = float(req['unit_price']) * float(req['quantity'])
+        detail.goods = req["goods"]
+        detail.quantity = req["quantity"]
+        detail.unit_price = req["unit_price"]
+        detail.unit = req["unit"]
+        detail.total_price = total_price
+        db.session.commit()
+
 
 
 
