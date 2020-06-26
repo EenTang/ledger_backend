@@ -22,3 +22,11 @@ class ParamsError(BaseError):
 
 class NotAllowed(BaseError):
     pass
+
+
+class ResourceConflic(BaseError):
+    pass
+
+
+class NotFound(BaseError):
+    pass

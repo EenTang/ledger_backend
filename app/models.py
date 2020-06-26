@@ -1,6 +1,8 @@
 from . import db
 from datetime import datetime, date
-from app.helper import result_fmt, success
+from app.helper import result_fmt, success, check_params
+from flask import current_app
+from app.exceptions import NotAllowed, ResourceConflic, NotFound
 
 
 class Boss(db.Model):
@@ -65,10 +67,93 @@ class ClientInfo(db.Model):
 
     store = db.Column(db.Integer, db.ForeignKey('store.id', onupdate="CASCADE", ondelete="CASCADE"))
     name = db.Column(db.String(64))
-    description = db.Column(db.Text)
-    phone = db.Column(db.String(64))
-    wechat = db.Column(db.String(64))
+    description = db.Column(db.Text, default='')
+    phone = db.Column(db.String(64), default='')
+    wechat = db.Column(db.String(64), default='')
 
+    @staticmethod
+    def add(**kwargs):
+        required = ["client_name", "store_id"]
+        check_params(kwargs, required)
+        stroe_id = kwargs['store_id']
+        name = kwargs['client_name']
+        exist = ClientInfo.query.filter_by(name=name, store=stroe_id).first()
+        if exist:
+            raise ResourceConflic("该姓名已经存在。")
+        info = ClientInfo()
+        info.store = stroe_id
+        info.name = name
+        info.description = kwargs.get('description', '')
+        info.phone = kwargs.get('phone', '')
+        info.wechat = kwargs.get('wechat', '')
+        db.session.add(info)
+        db.session.commit()
+        return success()
+
+    @staticmethod
+    def update(**kwargs):
+        required = ["client_id"]
+        check_params(kwargs, required)
+        client_id = kwargs.get('client_id')
+        info = ClientInfo.query.filter_by(id=client_id).first()
+        client_name = kwargs.get("client_name")
+        if info is None:
+            raise NotFound('客户信息不存在。')
+        if client_name:
+            exist = ClientInfo.query.filter_by(name=client_name, store=info.store).first()
+            if exist:
+                raise ResourceConflic("该姓名已经存在。")
+            else:
+                info.name = client_name
+        wechat = kwargs.get('wechat')
+        description = kwargs.get('description')
+        phone = kwargs.get('phone')
+        if wechat:
+            info.wechat = wechat
+        if description:
+            info.description = description
+        if phone:
+            info.phone = phone
+        db.session.commit()
+        return success()
+
+    @staticmethod
+    def get(**kwargs):
+        required = ["store_id"]
+        check_params(kwargs, required)
+        page = int(kwargs.get('page', 1))
+        page_size = int(kwargs.get('page_size', 20))
+        name = kwargs.get('client_name')
+        store_id = kwargs['store_id']
+        if name:
+            query = (ClientInfo.query
+                     .filter(ClientInfo.name.like(like_query(name)),
+                             ClientInfo.store == store_id)
+                     )
+        else:
+            query = (ClientInfo.query
+                     .filter(ClientInfo.store == store_id)
+                     )
+        query = query.paginate(page, page_size)
+        current_app.logger.info(query)
+        info = query.items
+        data = [{'client_name': item.name, 'client_id': item.id,
+                 'wechat': item.wechat, 'phone': item.phone, 'description': item.description}
+                for item in info]
+        return result_fmt(data, query)
+
+    @staticmethod
+    def delete(**kwargs):
+        required = ["client_id"]
+        check_params(kwargs, required)
+        client_id = kwargs["client_id"]
+        if IncomeGeneral.query.filter_by(client=client_id).count():
+            raise NotAllowed("该客户存在账单，不能删除。")
+
+        info = ClientInfo.query.filter_by(id=client_id).first()
+        db.session.delete(info)
+        db.session.commit()
+        return success()
 
 # class OrderGeneral(db.Model):
 
@@ -117,6 +202,59 @@ class IncomeGeneral(db.Model):
     def count_details(self):
         return IncomeDetails.query.filter_by(client=self.client, store=self.store, visible=1).count()
 
+    @staticmethod
+    def get(**kwargs):
+        page = int(kwargs.get('page', 1))
+        page_size = int(kwargs.get('page_size', 10))
+        query = query_with_client_info(IncomeGeneral, page, page_size, **kwargs)
+        data = []
+        for item, client_name in query.items:
+            item_info = item.get_dict(mapping={"client": "client_id", "id": "general_id"})
+            item_info['name'] = client_name
+            data.append(item_info)
+        result = result_fmt(data, query)
+        return result
+
+    @staticmethod
+    def add(**kwargs):
+        general = IncomeGeneral()
+        general.store = kwargs.get('store_id', 1)
+        general.client = kwargs['client_id']
+        general.total = kwargs['total']
+        general.debt = kwargs['total']
+        general.visible = True
+        db.session.add(general)
+        db.session.commit()
+        return success()
+
+    @staticmethod
+    def update(**kwargs):
+        general_id = kwargs['general_id']
+        general = IncomeGeneral.query.filter_by(id=general_id).first()
+        if general:
+            debt = kwargs.get('debt', general.debt)
+            total = kwargs.get('total', general.total)
+            payed = total - debt
+            payed = payed if payed > 0 else 0
+            general.debt = debt
+            general.total = total
+            general.payed = payed
+            db.session.add(general)
+            db.session.commit()
+        return success()
+
+    @staticmethod
+    def delete(**kwargs):
+        general_id = kwargs['general_id']
+        general = IncomeGeneral.query.filter_by(id=general_id).first()
+        if general.count_details() != 0:
+            current_app.logger.info(general.count_details())
+            raise NotAllowed("尚有未支付的订单，不能删除。")
+
+        db.session.delete(general)
+        db.session.commit()
+        return success()
+
 
 class IncomeDetails(db.Model):
 
@@ -140,12 +278,19 @@ class IncomeDetails(db.Model):
     visible = db.Column(db.Boolean, default=True)
     create_date = db.Column(db.Date, default=date.today)
 
-    def update_payed(self):
-        general = IncomeGeneral.query.filter_by(client=self.client, store=self.store).first()
-        if general:
-            general.payed += self.total_price
-            general.debt = general.total - self.total_price
-        return general
+    @staticmethod
+    def update_payed(**kwargs):
+        detail = IncomeDetails.query.filter_by(id=kwargs['detail_id']).first()
+        if detail:
+            detail.visible = False
+            general = IncomeGeneral.query.filter_by(
+                client=detail.client, store=detail.store).first()
+            payed = general.payed + detail.total_price
+            debt = general.total - payed
+            general.debt = debt
+            general.payed = payed
+            db.session.commit()
+        return success()
 
     def add(self, **kwargs):
         total_price = float(kwargs['unit_price']) * float(kwargs['quantity'])
@@ -209,6 +354,23 @@ class IncomeDetails(db.Model):
                 general.visible = False
             general.total = total if total >= 0 else 0
             general.debt = debt if debt >= 0 else 0
+            db.session.commit()
+        return success()
+
+    @staticmethod
+    def delete(**kwargs):
+        detail_id = kwargs["detail_id"]
+        detail = IncomeDetails.query.filter_by(id=detail_id).first()
+        if detail:
+            general = IncomeGeneral.query.filter_by(
+                store=detail.store, client=detail.client).first()
+            total = general.total - detail.total_price
+            debt = total - general.payed
+            if general.debt <= 0:
+                general.visible = False
+            general.total = total if total >= 0 else 0
+            general.debt = debt if debt >= 0 else 0
+            db.session.delete(detail)
             db.session.commit()
         return success()
 

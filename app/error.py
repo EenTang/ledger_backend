@@ -1,7 +1,7 @@
 from flask import jsonify
 from app.helper import fail
 from functools import wraps
-from app.exceptions import ParamsError, BaseError, NotAllowed
+from app.exceptions import ParamsError, BaseError, NotAllowed, ResourceConflic, NotFound
 # from app import handler
 
 
@@ -45,6 +45,10 @@ def err_handler(fun):
             return bad_request(str(err))
         except NotAllowed as err:
             return forbidden(str(err))
+        except ResourceConflic as err:
+            return conflict(str(err))
+        except NotFound as err:
+            return not_found(str(err))
         except BaseError as err:
             return unexpected_err()
     return wrapper
