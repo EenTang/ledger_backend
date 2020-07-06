@@ -1,6 +1,6 @@
 from . import handler
-from flask import jsonify, request, current_app
-from app.models import IncomeDetails, ClientInfo, IncomeGeneral, query_with_client_info
+from flask import jsonify, request, current_app, g
+from app.models import IncomeDetails, ClientInfo, IncomeGeneral
 from app import db
 from app.helper import result_fmt, success, check_params, now
 from app.error import bad_request, err_handler
@@ -17,6 +17,7 @@ def income_details():
         check_params(request.json, required)
         return IncomeDetails().add(**request.json)
     elif request.method == 'GET':
+        # IncomeDetails.get_unpaid_bills()
         return IncomeDetails.get(**request.args)
     elif request.method == 'PUT':
         required = ["unit_price", "quantity", "goods", "unit"]

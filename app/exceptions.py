@@ -30,3 +30,7 @@ class ResourceConflic(BaseError):
 
 class NotFound(BaseError):
     pass
+
+
+class Unauthorized(BaseError):
+    pass

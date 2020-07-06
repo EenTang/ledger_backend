@@ -7,8 +7,10 @@ def result_fmt(data, query):
     return jsonify({"data": data, "total": query.total, "page": query.page, "pages": query.pages})
 
 
-def success(message='success'):
-    return jsonify({'message': message})
+def success(message='success', **kwargs):
+    res = {'message': message}
+    res.update(kwargs)
+    return jsonify(res)
 
 
 def fail(error='', message='fail'):

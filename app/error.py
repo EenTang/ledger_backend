@@ -1,7 +1,7 @@
 from flask import jsonify
 from app.helper import fail
 from functools import wraps
-from app.exceptions import ParamsError, BaseError, NotAllowed, ResourceConflic, NotFound
+from app.exceptions import ParamsError, BaseError, NotAllowed, ResourceConflic, NotFound, Unauthorized
 # from app import handler
 
 
@@ -35,6 +35,12 @@ def forbidden(message="forbidden"):
     return response
 
 
+def unauthorized(message="unauthorized"):
+    response = fail("Unauthorized", message)
+    response.status_code = 401
+    return response
+
+
 def err_handler(fun):
     @wraps(fun)
     def wrapper(*args, **kwargs):
@@ -49,6 +55,8 @@ def err_handler(fun):
             return conflict(str(err))
         except NotFound as err:
             return not_found(str(err))
+        except Unauthorized as err:
+            return unauthorized(str(err))
         except BaseError as err:
             return unexpected_err()
     return wrapper
