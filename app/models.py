@@ -1,14 +1,16 @@
 from datetime import datetime, date
 import uuid
+import re
 from app.helper import result_fmt, success, check_params
 from flask import current_app
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
-from app.exceptions import NotAllowed, ResourceConflic, NotFound, Unauthorized
+from app.exceptions import NotAllowed, ResourceConflic, NotFound, Unauthorized, ParamsError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import create_engine, Column, Integer, func
 from sqlalchemy.ext.declarative import declarative_base
-from app.helper import type_convert
+from app.helper import type_convert, gen_random_password
+from sqlalchemy.orm import validates
 
 Base = declarative_base()
 
@@ -105,6 +107,14 @@ class User(db.Model):
     phone = db.Column(db.String(64))
     wechat = db.Column(db.String(64))
 
+    @validates('phone')
+    def validate_phone(self, key, value):
+        phone_pat = re.compile('^(13\d|14[5|7]|15\d|166|17[3|6|7]|18\d)\d{8}$')
+        res = re.search(phone_pat, value)
+        if not res:
+            raise ParamsError("请输入正确的手机号码!")
+        return value
+
     def generate_auth_token(self, expiration=3600):
         s = Serializer(current_app.config['SECRET_KEY'],
                        expires_in=expiration)
@@ -135,15 +145,46 @@ class User(db.Model):
         return success(data=user.get_dict(ignore={'password'}))
 
     @staticmethod
-    def update():
-        pass
+    def update(store_id, **request):
+        required = ["user_id"]
+        check_params(request, required)
+        user = User.query.filter_by(id=request['user_id'], store_id=store_id).first()
+        if user:
+            user.name = request.get('name', user.name)
+            user.phone = request.get('phone', user.phone)
+            user.role_id = request.get('role_id', user.role_id)
+            if user.role.name == 'Administrator':
+                raise NotAllowed("不能更改角色为管理员。")
+            db.session.commit()
+        return success()
+
+    @staticmethod
+    def reset_password(store_id, **request):
+        required = ["user_id"]
+        check_params(request, required)
+        user = User.query.filter_by(id=request['user_id'], store_id=store_id).first()
+        if user:
+            new_pass = gen_random_password()
+            user.password = generate_password_hash(new_pass)
+        db.session.commit()
+        return success(data=new_pass)
+
+    @staticmethod
+    def update_passsword(store_id, user_id, **request):
+        required = ['password']
+        check_params(request, required)
+        user = User.query.filter_by(id=user_id, store_id=store_id).first()
+        if user:
+            user.password = generate_password_hash(request['password'])
+        db.session.add(user)
+        db.session.commit()
+        return success()
 
     @staticmethod
     def delete(store_id, **request):
         required = ["user_id"]
         check_params(request, required)
         user = User.query.filter_by(id=request['user_id'], store_id=store_id).first()
-        current_app.logger.info('###%s' % type(user))
         if not user:
             raise NotFound()
         if user.role.name == 'Administrator':
@@ -159,14 +200,24 @@ class User(db.Model):
 
     @staticmethod
     def get(store_id, **request):
-        # required = ["store_id"]
-        # check_params(request, required)
         page = int(request.get('page', 1))
         page_size = int(request.get('page_size', 20))
         query = User.query
         if request.get('name'):
             query = query.filter_by(name=request['name'])
         query = query.filter_by(store_id=store_id).paginate(page, page_size)
+        res = []
+        for item in query.items:
+            if item.role.name == 'Administrator':
+                continue
+            data = item.get_dict(ignore={'password'})
+            data['role'] = item.role.name
+            res.append(data)
+        return result_fmt(res, query)
+
+    @staticmethod
+    def me(store_id, user_id):
+        query = User.query.filter_by(id=user_id, store_id=store_id).paginate(1, 20)
         res = []
         for item in query.items:
             data = item.get_dict(ignore={'password'})
@@ -208,7 +259,11 @@ class Role(db.Model):
 
     @staticmethod
     def get(**request):
-        query = Role.query.paginate(request.get('page', 1), request.get('page_size', 20))
+        query = Role.query.filter(
+            Role.name != 'Administrator').paginate(
+            request.get(
+                'page', 1), request.get(
+                'page_size', 20))
         return result_fmt([item.get_dict() for item in query.items], query)
 
     def add_permission(self, perm):

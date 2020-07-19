@@ -61,13 +61,6 @@ def get_token():
         role=g.current_user.role.name)
 
 
-# @handler.route('/user/admin', methods=['POST', 'GET', 'DELETE', 'PUT'])
-# @cross_origin()
-# @err_handler
-# def admin():
-#     pass
-
-
 @handler.route('/user/details', methods=['GET', 'PUT'])
 @cross_origin()
 @err_handler
@@ -75,7 +68,7 @@ def details():
     pass
 
 
-@handler.route('/admin/users/', methods=['GET', 'POST', 'DELETE'])
+@handler.route('/admin/users/', methods=['GET', 'POST', 'DELETE', 'PUT', 'PATCH'])
 @cross_origin()
 @err_handler
 def admin():
@@ -87,6 +80,20 @@ def admin():
         return User.add(g.current_user.store_id, **request.json)
     elif request.method == 'DELETE':
         return User.delete(g.current_user.store_id, **request.args)
+    elif request.method == 'PUT':
+        return User.update(g.current_user.store_id, **request.json)
+    elif request.method == 'PATCH':
+        return User.reset_password(g.current_user.store_id, **request.json)
+
+
+@handler.route('/me', methods=['GET', 'PATCH'])
+@cross_origin()
+@err_handler
+def me():
+    if request.method == 'GET':
+        return User.me(g.current_user.store_id, g.current_user.id)
+    elif request.method == 'PATCH':
+        return User.update_passsword(g.current_user.store_id, g.current_user.id, **request.json)
 
 
 @handler.route('/roles/', methods=['GET'])

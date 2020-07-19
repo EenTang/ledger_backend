@@ -1,3 +1,5 @@
+import random
+import string
 from flask import jsonify
 from datetime import datetime, date
 from app.exceptions import ParamsError
@@ -43,3 +45,7 @@ def type_convert(value):
         return value.strftime(DATE)
     else:
         return value
+
+
+def gen_random_password():
+    return "".join(random.sample(string.ascii_letters + string.digits, 8))
